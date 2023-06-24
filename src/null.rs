@@ -12,3 +12,9 @@ unsafe impl Allocator for Null {
         panic!()
     }
 }
+
+unsafe impl QueryAlloc for Null {
+    fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool {
+        false
+    }
+}
