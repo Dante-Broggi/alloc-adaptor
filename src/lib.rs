@@ -1,4 +1,6 @@
 #![feature(allocator_api)]
+#![feature(slice_ptr_len)]
+#![feature(slice_ptr_get)]
 
 use std::alloc::Allocator;
 unsafe trait QueryAlloc: Allocator {
@@ -15,6 +17,7 @@ unsafe trait DeallocAll: Allocator {
 
 pub mod null;
 pub mod fallback;
+pub mod segregator;
 
 #[cfg(test)]
 mod tests {
