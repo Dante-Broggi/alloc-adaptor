@@ -1,5 +1,5 @@
 use std::alloc::Allocator;
-use crate::QueryAlloc;
+use crate::{DeallocAll, QueryAlloc};
 
 pub struct Null;
 
@@ -64,4 +64,8 @@ unsafe impl QueryAlloc for Null {
     unsafe fn owns(&self, _ptr: std::ptr::NonNull<u8>, _layout: std::alloc::Layout) -> bool {
         false
     }
+}
+
+unsafe impl DeallocAll for Null {
+    unsafe fn deallocate_all(&self) {}
 }

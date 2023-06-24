@@ -1,5 +1,5 @@
 use std::alloc::Allocator;
-use crate::QueryAlloc;
+use crate::{DeallocAll, QueryAlloc};
 
 pub struct Fallback<A, B>(pub A, pub B);
 
@@ -28,5 +28,12 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
 unsafe impl<A: QueryAlloc, B: QueryAlloc> QueryAlloc for Fallback<A, B> {
     unsafe fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool {
         self.0.owns(ptr, layout) || self.1.owns(ptr, layout)
+    }
+}
+
+unsafe impl<A: DeallocAll + QueryAlloc, B: DeallocAll> DeallocAll for Fallback<A, B> {
+    unsafe fn deallocate_all(&self) {
+        self.0.deallocate_all();
+        self.1.deallocate_all();
     }
 }
