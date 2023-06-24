@@ -19,7 +19,17 @@ pub mod fallback;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::alloc::Global;
+    use std::{alloc::{Global, Layout}, ptr::NonNull};
+
+
+    #[test]
+    #[should_panic]
+    fn null_fails() {
+        assert_eq!(null::Null.allocate(Layout::for_value(&0)), Err(std::alloc::AllocError));
+        unsafe {
+            null::Null.deallocate(NonNull::dangling(), Layout::new::<u8>());
+        }
+    }
 
     #[test]
     fn fallback_works() {
