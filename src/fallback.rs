@@ -26,7 +26,7 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
 }
 
 unsafe impl<A: QueryAlloc, B: QueryAlloc> QueryAlloc for Fallback<A, B> {
-    fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool {
+    unsafe fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool {
         self.0.owns(ptr, layout) || self.1.owns(ptr, layout)
     }
 }

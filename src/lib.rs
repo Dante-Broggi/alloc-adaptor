@@ -2,7 +2,7 @@
 
 use std::alloc::Allocator;
 unsafe trait QueryAlloc: Allocator {
-    fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool;
+    unsafe fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool;
 }
 
 pub mod null;
