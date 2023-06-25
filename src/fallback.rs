@@ -17,6 +17,12 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
             self.1.deallocate(ptr, layout);
         }
     }
+
+    fn allocate_zeroed(&self, layout: std::alloc::Layout) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
+        self.0.allocate_zeroed(layout).or_else(|_x| {
+            self.1.allocate_zeroed(layout)
+        })
+    }
 }
 
 unsafe impl<A: QueryAlloc, B: QueryAlloc> QueryAlloc for Fallback<A, B> {
