@@ -5,6 +5,10 @@ unsafe trait QueryAlloc: Allocator {
     unsafe fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool;
 }
 
+unsafe trait AllocAll: Allocator {
+    fn allocate_all(&self) -> std::ptr::NonNull<[u8]>;
+}
+
 unsafe trait DeallocAll: Allocator {
     unsafe fn deallocate_all(&self);
 }

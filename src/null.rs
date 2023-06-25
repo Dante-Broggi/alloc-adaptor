@@ -1,5 +1,5 @@
-use std::alloc::Allocator;
-use crate::{DeallocAll, QueryAlloc};
+use std::{alloc::Allocator, ptr::NonNull};
+use crate::{AllocAll, DeallocAll, QueryAlloc};
 
 pub struct Null;
 
@@ -65,6 +65,13 @@ unsafe impl QueryAlloc for Null {
         false
     }
 }
+
+// unsafe impl AllocAll for Null {
+//     fn allocate_all(&self) -> std::ptr::NonNull<[u8]> {
+//        // would require allowing zero deallocate.
+//        unsafe { NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(self as *const _ as *mut u8, 0)) }
+//     }
+// }
 
 unsafe impl DeallocAll for Null {
     unsafe fn deallocate_all(&self) {}
