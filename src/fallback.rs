@@ -23,6 +23,45 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
             self.1.allocate_zeroed(layout)
         })
     }
+
+    unsafe fn grow(
+        &self,
+        ptr: std::ptr::NonNull<u8>,
+        old_layout: std::alloc::Layout,
+        new_layout: std::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
+        if self.0.owns(ptr, old_layout) {
+            self.0.grow(ptr, old_layout, new_layout)
+        } else {
+            self.1.grow(ptr, old_layout, new_layout)
+        }
+    }
+
+    unsafe fn grow_zeroed(
+        &self,
+        ptr: std::ptr::NonNull<u8>,
+        old_layout: std::alloc::Layout,
+        new_layout: std::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
+        if self.0.owns(ptr, old_layout) {
+            self.0.grow_zeroed(ptr, old_layout, new_layout)
+        } else {
+            self.1.grow_zeroed(ptr, old_layout, new_layout)
+        }
+    }
+
+    unsafe fn shrink(
+        &self,
+        ptr: std::ptr::NonNull<u8>,
+        old_layout: std::alloc::Layout,
+        new_layout: std::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
+        if self.0.owns(ptr, old_layout) {
+            self.0.shrink(ptr, old_layout, new_layout)
+        } else {
+            self.1.shrink(ptr, old_layout, new_layout)
+        }
+    }
 }
 
 unsafe impl<A: QueryAlloc, B: QueryAlloc> QueryAlloc for Fallback<A, B> {
