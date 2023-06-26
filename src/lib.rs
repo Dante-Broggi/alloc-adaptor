@@ -18,6 +18,7 @@ unsafe trait DeallocAll: Allocator {
 pub mod null;
 pub mod fallback;
 pub mod segregator;
+pub mod overalloc;
 
 #[cfg(test)]
 mod tests {
