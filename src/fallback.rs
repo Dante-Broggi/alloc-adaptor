@@ -30,10 +30,32 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
         old_layout: std::alloc::Layout,
         new_layout: std::alloc::Layout,
     ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
-        if self.0.owns(ptr, old_layout) {
+        debug_assert!(
+            new_layout.size() >= old_layout.size(),
+            "`new_layout.size()` must be greater than or equal to `old_layout.size()`"
+        );
+        let local = if self.0.owns(ptr, old_layout) {
             self.0.grow(ptr, old_layout, new_layout)
         } else {
             self.1.grow(ptr, old_layout, new_layout)
+        };
+        match local {
+            Ok(x) => { Ok(x) },
+            Err(_) => {
+                let new_ptr = self.allocate(new_layout)?;
+
+                // SAFETY: because `new_layout.size()` must be greater than or equal to
+                // `old_layout.size()`, both the old and new memory allocation are valid for reads and
+                // writes for `old_layout.size()` bytes. Also, because the old allocation wasn't yet
+                // deallocated, it cannot overlap `new_ptr`. Thus, the call to `copy_nonoverlapping` is
+                // safe. The safety contract for `dealloc` must be upheld by the caller.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_mut_ptr(), old_layout.size());
+                    self.deallocate(ptr, old_layout);
+                }
+
+                Ok(new_ptr)
+            }
         }
     }
 
@@ -43,10 +65,32 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
         old_layout: std::alloc::Layout,
         new_layout: std::alloc::Layout,
     ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
-        if self.0.owns(ptr, old_layout) {
+        debug_assert!(
+            new_layout.size() >= old_layout.size(),
+            "`new_layout.size()` must be greater than or equal to `old_layout.size()`"
+        );
+        let local = if self.0.owns(ptr, old_layout) {
             self.0.grow_zeroed(ptr, old_layout, new_layout)
         } else {
             self.1.grow_zeroed(ptr, old_layout, new_layout)
+        };
+        match local {
+            Ok(x) => { Ok(x) },
+            Err(_) => {
+                let new_ptr = self.allocate_zeroed(new_layout)?;
+
+                // SAFETY: because `new_layout.size()` must be greater than or equal to
+                // `old_layout.size()`, both the old and new memory allocation are valid for reads and
+                // writes for `old_layout.size()` bytes. Also, because the old allocation wasn't yet
+                // deallocated, it cannot overlap `new_ptr`. Thus, the call to `copy_nonoverlapping` is
+                // safe. The safety contract for `dealloc` must be upheld by the caller.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_mut_ptr(), old_layout.size());
+                    self.deallocate(ptr, old_layout);
+                }
+
+                Ok(new_ptr)
+            }
         }
     }
 
@@ -56,10 +100,32 @@ unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
         old_layout: std::alloc::Layout,
         new_layout: std::alloc::Layout,
     ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
-        if self.0.owns(ptr, old_layout) {
+        debug_assert!(
+            new_layout.size() <= old_layout.size(),
+            "`new_layout.size()` must be smaller than or equal to `old_layout.size()`"
+        );
+        let local = if self.0.owns(ptr, old_layout) {
             self.0.shrink(ptr, old_layout, new_layout)
         } else {
             self.1.shrink(ptr, old_layout, new_layout)
+        };
+        match local {
+            Ok(x) => { Ok(x) },
+            Err(_) => {
+                let new_ptr = self.allocate(new_layout)?;
+
+                // SAFETY: because `new_layout.size()` must be lower than or equal to
+                // `old_layout.size()`, both the old and new memory allocation are valid for reads and
+                // writes for `new_layout.size()` bytes. Also, because the old allocation wasn't yet
+                // deallocated, it cannot overlap `new_ptr`. Thus, the call to `copy_nonoverlapping` is
+                // safe. The safety contract for `dealloc` must be upheld by the caller.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_mut_ptr(), new_layout.size());
+                    self.deallocate(ptr, old_layout);
+                }
+        
+                Ok(new_ptr)
+            },
         }
     }
 }
