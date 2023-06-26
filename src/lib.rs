@@ -1,6 +1,8 @@
 #![feature(allocator_api)]
 #![feature(slice_ptr_len)]
 #![feature(slice_ptr_get)]
+#![feature(strict_provenance)]
+#![feature(ptr_sub_ptr)]
 
 use std::alloc::Allocator;
 unsafe trait QueryAlloc: Allocator {
@@ -21,6 +23,7 @@ pub mod segregator;
 pub mod overalloc;
 pub mod leaky;
 pub mod zeroed;
+pub mod bitmap;
 
 #[cfg(test)]
 mod tests {
