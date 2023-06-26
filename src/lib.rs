@@ -19,6 +19,7 @@ pub mod null;
 pub mod fallback;
 pub mod segregator;
 pub mod overalloc;
+pub mod leaky;
 
 #[cfg(test)]
 mod tests {
