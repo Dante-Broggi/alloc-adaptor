@@ -23,7 +23,7 @@ pub mod overalloc;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{alloc::{Global, Layout}, ptr::NonNull};
+    use std::{alloc::{Global, Layout, System}, ptr::NonNull};
 
 
     #[test]
@@ -40,5 +40,22 @@ mod tests {
         let mut result: Vec<String, _> = Vec::new_in(fallback::Fallback(null::Null, Global));
         result.push("x".into());
         assert_eq!(result, &["x"]);
+    }
+
+    #[test]
+    fn segregator_works() {
+        let s = segregator::Segregator::<_, _, 4>(overalloc::Overalloc(Global), System);
+        let l = Layout::from_size_align(4, 1).unwrap();
+        let m = s.allocate(l).unwrap();
+        assert_eq!(m.len(), 4);
+        // FIXME: dealloc on assert fail, as well
+        unsafe { s.deallocate(m.as_non_null_ptr(), l) };
+    }
+
+    #[test]
+    fn overalloc_works() {
+        let s = overalloc::Overalloc(Global);
+        let b = Box::new_in(7, s);
+        assert_eq!(*b, 7);
     }
 }
