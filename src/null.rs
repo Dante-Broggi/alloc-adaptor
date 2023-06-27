@@ -1,6 +1,7 @@
 use std::{alloc::Allocator, ptr::NonNull};
 use crate::{AllocAll, DeallocAll, QueryAlloc};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null;
 
 unsafe impl Allocator for Null {
