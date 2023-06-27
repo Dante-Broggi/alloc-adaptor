@@ -71,12 +71,14 @@ mod tests {
         let b = Box::new_in(7, s);
         assert_eq!(*b, 7);
         let layout = Layout::from_size_align(0, 1).unwrap();
-        let a = s.allocate(layout).expect_err("alloc `0` bytes");
+        let _ = s.allocate(layout).expect_err("alloc `0` bytes");
         let layout = Layout::from_size_align(16, 16).unwrap();
-        let a = s.allocate(layout).expect_err("alloc `16` align");
+        let _ = s.allocate(layout).expect_err("alloc `16` align");
         let layout = Layout::from_size_align(4000, 2).unwrap();
         let a = s.allocate(layout).unwrap();
         assert_eq!(a.len(), 4096);
+        let new_layout = Layout::from_size_align(4096, 4).unwrap();
+        let a = unsafe { s.grow(a.as_non_null_ptr(), layout, new_layout) }.unwrap();
         unsafe { s.deallocate(a.as_non_null_ptr(), layout) };
     }
 }

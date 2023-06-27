@@ -329,6 +329,86 @@ unsafe impl<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> Allocator
             control[word_idx].set(control[word_idx].get() & u64::MAX >> blocks);
         }
     }
+
+    unsafe fn grow(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, std::alloc::AllocError> {
+        debug_assert!(
+            new_layout.size() >= old_layout.size(),
+            "`new_layout.size()` must be greater than or equal to `old_layout.size()`"
+        );
+        if new_layout.align() > ALIGN || old_layout.align() > ALIGN {
+            // FIXME: handle aligned alloc requests
+            return Err(std::alloc::AllocError);
+        }
+
+        let blocks_old = Self::bytes2blocks(old_layout.size());
+        let blocks_new = Self::bytes2blocks(new_layout.size());
+        assert!(blocks_old <= blocks_new);
+
+        // Possibly we have enough slack at the end of the block!
+        if blocks_old == blocks_new {
+            let new_capacity = blocks_new * BLOCK_SIZE;
+            return Ok(NonNull::slice_from_raw_parts(ptr, new_capacity));
+        }
+
+        assert_eq!((ptr.as_ptr().sub_ptr(self.payload().unwrap().as_mut_ptr())) % BLOCK_SIZE, 0);
+        let block_idx = (ptr.as_ptr().sub_ptr(self.payload().unwrap().as_mut_ptr())) / BLOCK_SIZE;
+        let block_idx_after = block_idx + blocks_old;
+
+        // Try the maximum
+        let word_idx = block_idx_after / 64;
+        let msb_idx = (block_idx_after % 64).try_into().unwrap();
+        let mut p = Err(std::alloc::AllocError);
+        let hint = self.allocate_at(word_idx, msb_idx,  blocks_new - blocks_old, &mut p);
+        if hint.0 != usize::MAX {
+            return Err(std::alloc::AllocError);
+        }
+        let p = p.unwrap();
+        // Expansion successful
+        assert_eq!(p.as_mut_ptr(), ptr.as_ptr().wrapping_add(blocks_old * BLOCK_SIZE));
+        let new_capacity = blocks_new * BLOCK_SIZE;
+        return Ok(NonNull::slice_from_raw_parts(ptr, new_capacity));
+    }
+
+    unsafe fn grow_zeroed(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, std::alloc::AllocError> {
+        debug_assert!(
+            new_layout.size() >= old_layout.size(),
+            "`new_layout.size()` must be greater than or equal to `old_layout.size()`"
+        );
+
+        let new_ptr = self.grow(ptr, old_layout, new_layout)?;
+        // Safety: fill bytes from the end of the old allocation size to the new allocation size with `0`.
+        unsafe {
+            core::ptr::write_bytes(new_ptr.as_mut_ptr().add(old_layout.size()), 0, new_layout.size() - old_layout.size());
+        }
+        Ok(new_ptr)
+    }
+
+    unsafe fn shrink(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, std::alloc::AllocError> {
+        debug_assert!(
+            new_layout.size() <= old_layout.size(),
+            "`new_layout.size()` must be smaller than or equal to `old_layout.size()`"
+        );
+        // Shrink. Will shrink in place by deallocating the trailing part.
+        let new_capacity = Self::bytes2blocks(new_layout.size()) * BLOCK_SIZE;
+        let tail_layout = Layout::from_size_align(old_layout.size() - new_layout.size(), ALIGN).map_err(|_| std::alloc::AllocError)?;
+        self.deallocate(NonNull::new_unchecked(ptr.as_ptr().add(new_capacity)), tail_layout);
+        Ok(NonNull::slice_from_raw_parts(ptr, new_capacity))
+    }
 }
 
 unsafe impl<A: Allocator, const N: usize, const ALIGN: usize> QueryAlloc for BitmappedBlock<A, N, ALIGN> {
