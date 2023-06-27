@@ -3,6 +3,7 @@
 #![feature(slice_ptr_get)]
 #![feature(strict_provenance)]
 #![feature(ptr_sub_ptr)]
+#![feature(int_roundings)]
 
 use std::alloc::Allocator;
 unsafe trait QueryAlloc: Allocator {
@@ -62,5 +63,20 @@ mod tests {
         let s = overalloc::Overalloc(Global);
         let b = Box::new_in(7, s);
         assert_eq!(*b, 7);
+    }
+
+    #[test]
+    fn bitmap_works() {
+        let s = &bitmap::BitmappedBlock::<_, 128, 8>::new(Global, 64);
+        let b = Box::new_in(7, s);
+        assert_eq!(*b, 7);
+        let layout = Layout::from_size_align(0, 1).unwrap();
+        let a = s.allocate(layout).expect_err("alloc `0` bytes");
+        let layout = Layout::from_size_align(16, 16).unwrap();
+        let a = s.allocate(layout).expect_err("alloc `16` align");
+        let layout = Layout::from_size_align(4000, 2).unwrap();
+        let a = s.allocate(layout).unwrap();
+        assert_eq!(a.len(), 4096);
+        unsafe { s.deallocate(a.as_non_null_ptr(), layout) };
     }
 }

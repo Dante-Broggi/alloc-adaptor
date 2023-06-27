@@ -1,53 +1,68 @@
-use std::{alloc::Allocator, ptr::NonNull, cell::Cell, ops::Deref, marker::PhantomData};
+use std::{alloc::{Allocator, Layout}, ptr::NonNull, cell::Cell};
 use crate::{DeallocAll, QueryAlloc};
-
-/// a `&'static T`, except can be taken as a `*mut T`
-#[repr(transparent)]
-struct RawRef<T: ?Sized>(NonNull<T>, PhantomData<Cell<T>>);
-
-impl<T: ?Sized> RawRef<T> {
-    fn into_ptr(self) -> *mut T {
-        self.0.as_ptr()
-    }
-}
-
-impl<T: ?Sized> Clone for RawRef<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<T: ?Sized> Copy for RawRef<T> {}
-
-impl<T: ?Sized> Deref for RawRef<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        unsafe { self.0.as_ref() }
-    }
-}
 
 /**
 Store an out of line hot bitmap of used blocks
  */
 
-pub struct BitmappedBlock<A, const BLOCK_SIZE: usize> {
+pub struct BitmappedBlock<A, const BLOCK_SIZE: usize, const ALIGN: usize> {
     parent: A,
     blocks: usize,
-    /// `Option<Box<[u64], &A>>`
-    control: Cell<Option<RawRef<[Cell<u64>]>>>,
-    /// `Option<Box<[Byte], &A>>`
-    payload: Cell<Option<NonNull<[u8]>>>,
+    data: Cell<Option<NonNull<[u8]>>>,
+    // /// `Option<Box<[u64], &A>>`
+    // control: Cell<Option<RawRef<[Cell<u64>]>>>,
+    // /// `Option<Box<[Byte], &A>>`
+    // payload: Cell<Option<NonNull<[u8]>>>,
     start_idx: Cell<usize>,
 }
 
-impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
+impl<A, const BLOCK_SIZE: usize, const ALIGN: usize> BitmappedBlock<A, BLOCK_SIZE, ALIGN> {
     pub fn new(parent: A, blocks: usize) -> Self {
+        assert!(ALIGN.is_power_of_two());
+        assert_eq!(ALIGN.next_multiple_of(core::mem::align_of::<u64>()), ALIGN);
+        assert_eq!(BLOCK_SIZE.next_multiple_of(ALIGN), BLOCK_SIZE);
         Self { 
             parent,
             blocks,
-            control: Cell::new(None),
-            payload: Cell::new(None),
+            data: Cell::new(None),
+            // control: Cell::new(None),
+            // payload: Cell::new(None),
             start_idx: Cell::new(0),
         }
+    }
+
+    fn control_bytes(&self) -> usize {
+        ((self.blocks + 63) / 64) * 8
+    }
+
+    fn control_bytes_rounded(&self) -> usize {
+        self.control_bytes().next_multiple_of(ALIGN)
+    }
+
+    fn payload_bytes(&self) -> usize {
+        self.blocks * BLOCK_SIZE
+    }
+
+    fn data_layout(&self) -> Layout {
+        let size = 
+        self.control_bytes_rounded() // control bits
+        + self.payload_bytes() // payload
+        ;
+        Layout::from_size_align(size, ALIGN).unwrap()
+    }
+
+    fn control(&self) -> Option<&[Cell<u64>]> {
+        self.data.get().map(|x| unsafe {
+            // x.get_unchecked_mut(0 .. self.controlBytes() / 8) // if data is [u64]
+            &*core::ptr::slice_from_raw_parts_mut(x.as_mut_ptr().cast(), self.control_bytes() / 8)
+        })
+    }
+
+    fn payload(&self) -> Option<NonNull<[u8]>> {
+        self.data.get().map(|x| unsafe {
+            // x.get_unchecked_mut(self.controlBytesRounded() / 8 .. ) // if data is [u64]
+            x.get_unchecked_mut(self.control_bytes_rounded() .. )
+        })
     }
 
     /*
@@ -56,7 +71,7 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
     _control[_startIdx]) are already occupied.
     */
     fn adjust_start_idx(&self) {
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         while self.start_idx.get() < control.len() 
         && control[self.start_idx.get()].get() == u64::MAX
         {
@@ -72,7 +87,7 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
         assert!(msb_idx <= 63);
         let start = (word_idx * 64 + Into::<usize>::into(msb_idx)) * BLOCK_SIZE;
         let end = start + BLOCK_SIZE * how_many_blocks;
-        let payload = self.payload.get().unwrap();
+        let payload = self.payload().unwrap();
         if end <= payload.len() { 
             unsafe {
                 return Ok(payload.get_unchecked_mut(start .. end)) 
@@ -92,7 +107,7 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
     */
     fn allocate_at(&self, word_idx: usize, msb_idx: u8, blocks: usize, result: &mut Result<NonNull<[u8]>, std::alloc::AllocError>) -> (usize, u8) {
         // SAFETY: we have thread local access to `self.control`
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         assert!(blocks > 0);
         assert!(word_idx < control.len());
         assert!(msb_idx <= 63);
@@ -136,7 +151,7 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
     /** Allocates as many blocks as possible at the end of the blocks indicated
     by wordIdx. Returns the number of blocks allocated. */
     fn allocate_at_tail(&self, word_idx: usize) -> u32 {
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         assert!(word_idx < control.len());
         let available = (control[word_idx].get()).trailing_zeros();
         control[word_idx].set(control[word_idx].get() | u64::MAX >> available);
@@ -145,7 +160,7 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
 
     fn small_alloc(&self, blocks: u8) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
         assert!(blocks >= 2 && blocks <= 64);
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         for i in self.start_idx.get() .. control.len() {
             // Test within the current 64-bit word
             let v = control[i].get();
@@ -177,7 +192,7 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
         assert!(blocks > 64);
         let mut result = Err(std::alloc::AllocError);
         let mut pos = (self.start_idx.get(), 0);
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         loop {
             if pos.0 >= control.len() {
                 // No more memory
@@ -199,27 +214,48 @@ impl<A, const BLOCK_SIZE: usize> BitmappedBlock<A, BLOCK_SIZE> {
     /** Allocates given blocks at the beginning blocks indicated by wordIdx.
     Returns true if allocation was possible, false otherwise. */
     fn allocate_at_front(&self, word_idx: usize, blocks: u8) -> bool {
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         assert!(word_idx < control.len() && blocks >= 1 && blocks <= 64);
         let mask = (1 << (64 - blocks)) - 1;
         if control[word_idx].get() > mask { return false };
         // yay, works
         control[word_idx].set(control[word_idx].get() | !mask);
         return true;
-    } 
+    }
+
+
 }
 
-unsafe impl<A: Allocator, const BLOCK_SIZE: usize> Allocator for BitmappedBlock<A, BLOCK_SIZE> {
+impl<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> BitmappedBlock<A, BLOCK_SIZE, ALIGN> {
+    fn initialize(&self) {
+        assert!(self.blocks != 0);
+        let m = self.parent.allocate_zeroed(self.data_layout()).unwrap();
+        self.data.set(Some(m));
+        // self.control.set(Some(m.get_unchecked_mut(0 .. controlBytes / 8)));
+        // self.payload.set(Some(m.get_unchecked_mut(controlBytesRounded / 8 .. )));
+        assert_eq!(self.payload().unwrap().len(), self.blocks * BLOCK_SIZE);
+    }
+}
+
+unsafe impl<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> Allocator for BitmappedBlock<A, BLOCK_SIZE, ALIGN> {
     fn allocate(&self, layout: std::alloc::Layout) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
-        if layout.align() != 1 {
+        if layout.align() > ALIGN {
             // FIXME: handle aligned alloc requests
             return Err(std::alloc::AllocError);
         }
-        if self.control.get().is_none() {
+        if self.control().is_none() {
             // Lazy initialize
+            if self.blocks == 0 {
+                // static if (hasMember!(Allocator, "allocateAll"))
+                //     self.initialize(parent.allocateAll);
+                // else
+                    return Err(std::alloc::AllocError);
+            } else {
+                self.initialize();
+            }
         }
-        assert!((self.blocks != 0) && self.control.get().is_some() && self.payload.get().is_some());
-        let control = self.control.get().unwrap();
+        assert!((self.blocks != 0) && self.control().is_some() && self.payload().is_some());
+        let control = self.control().unwrap();
         let blocks = Self::bytes2blocks(layout.size());
         
         match blocks {
@@ -256,16 +292,17 @@ unsafe impl<A: Allocator, const BLOCK_SIZE: usize> Allocator for BitmappedBlock<
         // Round up size to multiple of block size
         let mut blocks: usize = Self::bytes2blocks(layout.size());
         // Locate position
-        let pos = ptr.as_ptr().sub_ptr(self.payload.get().unwrap().as_mut_ptr());
+        let pos = ptr.as_ptr().sub_ptr(self.payload().unwrap().as_mut_ptr());
         assert_eq!(pos % BLOCK_SIZE, 0);
         let block_idx = pos / BLOCK_SIZE;
         let mut word_idx = block_idx / 64;
         let mut msb_idx: u8 = (block_idx % 64).try_into().unwrap();
         if self.start_idx.get() > word_idx { self.start_idx.set(word_idx) };
 
-        let control = self.control.get().unwrap();
+        let control = self.control().unwrap();
         
         // Three stages: heading bits, full words, leftover bits
+        #[allow(unused_assignments)]
         if msb_idx != 0 {
             if blocks + Into::<usize>::into(msb_idx) <= 64 {
                 let blocks: u8 = blocks.try_into().unwrap();
@@ -294,19 +331,20 @@ unsafe impl<A: Allocator, const BLOCK_SIZE: usize> Allocator for BitmappedBlock<
     }
 }
 
-unsafe impl<A: Allocator, const N: usize> QueryAlloc for BitmappedBlock<A, N> {
+unsafe impl<A: Allocator, const N: usize, const ALIGN: usize> QueryAlloc for BitmappedBlock<A, N, ALIGN> {
     unsafe fn owns(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) -> bool {
-        self.payload.get().is_some_and(|p| {
+        self.payload().is_some_and(|p| {
             ptr.as_ptr() >= p.as_mut_ptr()
             && ptr.addr().get() + layout.size() <= p.as_mut_ptr().addr() + p.len()
         })
     }
 }
 
-unsafe impl<A: Allocator, const N: usize> DeallocAll for BitmappedBlock<A, N> {
+unsafe impl<A: Allocator, const N: usize, const ALIGN: usize> DeallocAll for BitmappedBlock<A, N, ALIGN> {
     unsafe fn deallocate_all(&self) {
-        self.control.replace(None).map(|x| Box::from_raw_in(x.into_ptr(), self.parent.by_ref()));
-        self.payload.replace(None).map(|x| Box::from_raw_in(x.as_ptr(), self.parent.by_ref()));
+        self.data.replace(None).map(|x| self.parent.deallocate(x.as_non_null_ptr(), self.data_layout()));
+        // self.control.replace(None).map(|x| Box::from_raw_in(x.into_ptr(), self.parent.by_ref()));
+        // self.payload.replace(None).map(|x| Box::from_raw_in(x.as_ptr(), self.parent.by_ref()));
         self.start_idx.set(0);
     }
 }
@@ -315,15 +353,15 @@ unsafe impl<A: Allocator, const N: usize> DeallocAll for BitmappedBlock<A, N> {
 Finds a run of contiguous ones in $(D x) of length at least $(D n).
 
 ```
-    use alloc_adaptor::bitmap::findContigOnes;
-    assert_eq!(findContigOnes(0x0000_0000_0000_0300, 2), 54);
-    assert_eq!(findContigOnes(!0_u64, 1), 0);
-    assert_eq!(findContigOnes(!0_u64, 2), 0);
-    assert_eq!(findContigOnes(!0_u64, 32), 0);
-    assert_eq!(findContigOnes(!0_u64, 64), 0);
-    assert_eq!(findContigOnes(0_u64, 1), 64);
-    assert_eq!(findContigOnes(0x4000_0000_0000_0000, 1), 1);
-    assert_eq!(findContigOnes(0x0000_0F00_0000_0000, 4), 20);
+    use alloc_adaptor::bitmap::find_contig_ones;
+    assert_eq!(find_contig_ones(0x0000_0000_0000_0300, 2), 54);
+    assert_eq!(find_contig_ones(!0_u64, 1), 0);
+    assert_eq!(find_contig_ones(!0_u64, 2), 0);
+    assert_eq!(find_contig_ones(!0_u64, 32), 0);
+    assert_eq!(find_contig_ones(!0_u64, 64), 0);
+    assert_eq!(find_contig_ones(0_u64, 1), 64);
+    assert_eq!(find_contig_ones(0x4000_0000_0000_0000, 1), 1);
+    assert_eq!(find_contig_ones(0x0000_0F00_0000_0000, 4), 20);
 ```
 
 */
@@ -352,11 +390,11 @@ Unconditionally sets the bits from lsb through msb in w to zero.
 
 ```
     use alloc_adaptor::bitmap::set_bits;
-    let mut w: u64;
-    w = 0; set_bits(&mut w, 0, 63); assert_eq!(w, u64::MAX);
-    w = 0; set_bits(&mut w, 1, 63); assert_eq!(w, u64::MAX - 1);
-    w = 6; set_bits(&mut w, 0, 1); assert_eq!(w, 7);
-    w = 6; set_bits(&mut w, 3, 3); assert_eq!(w, 14);
+    let mut w = core::cell::Cell::<u64>::new(0);
+    w.set(0); set_bits(&mut w, 0, 63); assert_eq!(w.get(), u64::MAX);
+    w.set(0); set_bits(&mut w, 1, 63); assert_eq!(w.get(), u64::MAX - 1);
+    w.set(6); set_bits(&mut w, 0, 1); assert_eq!(w.get(), 7);
+    w.set(6); set_bits(&mut w, 3, 3); assert_eq!(w.get(), 14);
 ```
 
 */
