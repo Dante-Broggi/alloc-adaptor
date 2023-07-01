@@ -56,8 +56,9 @@ unsafe impl<A: AllocAll> AllocAll for Zeroed<A> {
     }
 }
 
-unsafe impl<A: DeallocAll> DeallocAll for Zeroed<A> {
-    unsafe fn deallocate_all(&self) {
-        self.0.deallocate_all()
-    }
-}
+// Not provided because we cannot gauruntee we are the only access to self.0
+// unsafe impl<A: DeallocAll> DeallocAll for Zeroed<A> {
+//     unsafe fn deallocate_all(&self) {
+//         self.0.deallocate_all()
+//     }
+// }

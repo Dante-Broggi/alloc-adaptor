@@ -49,9 +49,10 @@ unsafe impl<Small: QueryAlloc, B: QueryAlloc, const N: usize> QueryAlloc for Seg
     }
 }
 
-unsafe impl<Small: DeallocAll, B: DeallocAll, const N: usize> DeallocAll for Segregator<Small, B, N> {
-    unsafe fn deallocate_all(&self) {
-        self.0.deallocate_all();
-        self.1.deallocate_all();
-    }
-}
+// Not provided because we cannot gauruntee we are the only access to self.{0,1}
+// unsafe impl<Small: DeallocAll, B: DeallocAll, const N: usize> DeallocAll for Segregator<Small, B, N> {
+//     unsafe fn deallocate_all(&self) {
+//         self.0.deallocate_all();
+//         self.1.deallocate_all();
+//     }
+// }

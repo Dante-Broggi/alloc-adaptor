@@ -136,9 +136,10 @@ unsafe impl<A: QueryAlloc, B: QueryAlloc> QueryAlloc for Fallback<A, B> {
     }
 }
 
-unsafe impl<A: DeallocAll + QueryAlloc, B: DeallocAll> DeallocAll for Fallback<A, B> {
-    unsafe fn deallocate_all(&self) {
-        self.0.deallocate_all();
-        self.1.deallocate_all();
-    }
-}
+// Not provided because we cannot gauruntee we are the only access to self.{0,1}
+// unsafe impl<A: DeallocAll + QueryAlloc, B: DeallocAll> DeallocAll for Fallback<A, B> {
+//     unsafe fn deallocate_all(&self) {
+//         self.0.deallocate_all();
+//         self.1.deallocate_all();
+//     }
+// }
