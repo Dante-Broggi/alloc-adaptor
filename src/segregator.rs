@@ -9,10 +9,10 @@ unsafe impl<Small: Allocator, Large: Allocator, const N: usize> Allocator for Se
         if layout.size() <= N {
             // We cannot allow large allocations from `Small` to escape
             // as we would deallocate them with `Large`
-            let ptr = self.0.allocate(layout)?.as_ptr();
+            let ptr = self.0.allocate(layout)?;
             let len = core::cmp::min(ptr.len(), N);
-            let ptr = core::ptr::slice_from_raw_parts_mut(ptr.as_mut_ptr(), len);
-            Ok(NonNull::new(ptr).unwrap())
+            let ptr = NonNull::slice_from_raw_parts(ptr.as_non_null_ptr(), len);
+            Ok(ptr)
         } else {
             self.1.allocate(layout)
         }
