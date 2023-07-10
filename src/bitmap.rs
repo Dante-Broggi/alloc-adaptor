@@ -5,7 +5,7 @@ use crate::{DeallocAll, QueryAlloc};
 Store an out of line hot bitmap of used blocks
  */
 
-pub struct BitmappedBlock<A, const BLOCK_SIZE: usize, const ALIGN: usize> {
+pub struct BitmappedBlock<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> {
     parent: A,
     blocks: usize,
     data: Cell<Option<NonNull<[u8]>>>,
@@ -16,7 +16,7 @@ pub struct BitmappedBlock<A, const BLOCK_SIZE: usize, const ALIGN: usize> {
     start_idx: Cell<usize>,
 }
 
-impl<A, const BLOCK_SIZE: usize, const ALIGN: usize> BitmappedBlock<A, BLOCK_SIZE, ALIGN> {
+impl<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> BitmappedBlock<A, BLOCK_SIZE, ALIGN> {
     pub fn new(parent: A, blocks: usize) -> Self {
         assert!(ALIGN.is_power_of_two());
         assert_eq!(ALIGN.next_multiple_of(core::mem::align_of::<u64>()), ALIGN);
@@ -426,6 +426,12 @@ unsafe impl<A: Allocator, const N: usize, const ALIGN: usize> DeallocAll for Bit
         // self.control.replace(None).map(|x| Box::from_raw_in(x.into_ptr(), self.parent.by_ref()));
         // self.payload.replace(None).map(|x| Box::from_raw_in(x.as_ptr(), self.parent.by_ref()));
         self.start_idx.set(0);
+    }
+}
+
+impl<A: Allocator, const N: usize, const ALIGN: usize> Drop for BitmappedBlock<A, N, ALIGN> {
+    fn drop(&mut self) {
+        unsafe { self.deallocate_all() }
     }
 }
 
