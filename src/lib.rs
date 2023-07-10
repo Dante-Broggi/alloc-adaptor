@@ -12,6 +12,7 @@ unsafe trait QueryAlloc: Allocator {
 
 unsafe trait AllocAll: Allocator {
     fn allocate_all(&self) -> std::ptr::NonNull<[u8]>;
+    fn allocate_all_zeroed(&self) -> std::ptr::NonNull<[u8]>;
 }
 
 unsafe trait DeallocAll: Allocator {

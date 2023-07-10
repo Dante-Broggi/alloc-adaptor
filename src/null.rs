@@ -1,5 +1,5 @@
-use std::{alloc::Allocator, ptr::NonNull};
-use crate::{AllocAll, DeallocAll, QueryAlloc};
+use std::{alloc::Allocator};
+use crate::{DeallocAll, QueryAlloc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null;

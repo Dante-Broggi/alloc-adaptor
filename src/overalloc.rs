@@ -76,6 +76,9 @@ unsafe impl<A: AllocAll> AllocAll for Overalloc<A> {
     fn allocate_all(&self) -> std::ptr::NonNull<[u8]> {
         self.0.allocate_all()
     }
+    fn allocate_all_zeroed(&self) -> std::ptr::NonNull<[u8]> {
+        self.0.allocate_all_zeroed()
+    }
 }
 
 // Not provided because we cannot gauruntee we are the only access to self.0

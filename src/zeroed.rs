@@ -52,7 +52,10 @@ unsafe impl<A: QueryAlloc> QueryAlloc for Zeroed<A> {
 
 unsafe impl<A: AllocAll> AllocAll for Zeroed<A> {
     fn allocate_all(&self) -> std::ptr::NonNull<[u8]> {
-        self.0.allocate_all()
+        self.0.allocate_all_zeroed()
+    }
+    fn allocate_all_zeroed(&self) -> std::ptr::NonNull<[u8]> {
+        self.0.allocate_all_zeroed()
     }
 }
 

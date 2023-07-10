@@ -54,6 +54,9 @@ unsafe impl<A: AllocAll> AllocAll for Leaky<A> {
     fn allocate_all(&self) -> std::ptr::NonNull<[u8]> {
         self.0.allocate_all()
     }
+    fn allocate_all_zeroed(&self) -> std::ptr::NonNull<[u8]> {
+        self.0.allocate_all_zeroed()
+    }
 }
 
 unsafe impl<A: Allocator> DeallocAll for Leaky<A> {
