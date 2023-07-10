@@ -5,6 +5,7 @@ use crate::{DeallocAll, QueryAlloc};
 Store an out of line hot bitmap of used blocks
  */
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct BitmappedBlock<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> {
     parent: A,
     blocks: usize,
