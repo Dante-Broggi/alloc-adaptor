@@ -1,6 +1,8 @@
 use std::alloc::Allocator;
 use crate::{DeallocAll, QueryAlloc, AllocAll};
 
+/// Behaves like the inner allocator for allocation and reallocation functions,
+/// but does nothing for deallocation functions.
 pub struct Leaky<A>(pub A);
 
 unsafe impl<A: Allocator> Allocator for Leaky<A> {

@@ -1,6 +1,13 @@
 use std::alloc::{Allocator, Layout};
 use crate::{DeallocAll, QueryAlloc, AllocAll};
 
+/**
+A test case allocator, which always overallocates the given layout,
+before handing it to the inner alloctor.
+One can use `my_layout` to determine the overallocated layout.
+Currently: this adds the alignment to the size, and then increments the alignment exponent,
+even for zero sized allocations.
+ */
 pub struct Overalloc<A>(pub A);
 
 impl<A> Overalloc<A> {

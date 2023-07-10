@@ -1,6 +1,7 @@
 use std::alloc::Allocator;
 use crate::{DeallocAll, QueryAlloc, AllocAll};
 
+/// Behaves like the inner allocator, but allways uses the `*_zeroed` versions of the functions if available.
 pub struct Zeroed<A>(pub A);
 
 unsafe impl<A: Allocator> Allocator for Zeroed<A> {
