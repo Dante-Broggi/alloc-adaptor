@@ -1,6 +1,8 @@
 use std::{alloc::Allocator};
 use crate::{DeallocAll, QueryAlloc};
 
+/// `Null` is an emphatically empty implementation of the allocator interface.
+/// Although it has no direct use, it is useful as a "terminator" in composite allocators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null;
 

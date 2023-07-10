@@ -2,9 +2,29 @@ use std::{alloc::{Allocator, Layout}, ptr::NonNull, cell::Cell};
 use crate::{DeallocAll, QueryAlloc};
 
 /**
-Store an out of line hot bitmap of used blocks
- */
+`BitmappedBlock` implements a simple heap consisting of one contiguous area
+of memory organized in blocks, each of size `BLOCK_SIZE`. A block is a unit
+of allocation. A bitmap serves as bookkeeping data, more precisely one bit per
+block indicating whether that block is currently allocated or not.
 
+There are advantages to storing bookkeeping data separated from the payload
+(as opposed to an affix metadata scheme). The layout is more compact, searching
+for a free block during allocation enjoys better cache locality, and
+deallocation does not touch memory around the payload being deallocated (which
+is often cold).
+
+Allocation requests are handled on a first-fit basis. Although linear in
+complexity, allocation is in practice fast because of the compact bookkeeping
+representation, use of simple and fast bitwise routines, and memoization of the
+first available block position. A known issue with this general approach is
+fragmentation, partially mitigated by coalescing. Since `BitmappedBlock` does
+not maintain the allocated size, freeing memory implicitly coalesces free blocks
+together. Also, tuning `BLOCK_SIZE` has a considerable impact on both internal
+and external fragmentation.
+
+Note: currently, this implementation cannot handle allocation requests with
+alignment greater than the `ALIGN` parameter.
+*/
 #[derive(Debug, PartialEq, Eq)]
 pub struct BitmappedBlock<A: Allocator, const BLOCK_SIZE: usize, const ALIGN: usize> {
     parent: A,

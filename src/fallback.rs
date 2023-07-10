@@ -1,6 +1,20 @@
 use std::alloc::Allocator;
 use crate::{DeallocAll, QueryAlloc};
 
+/**
+`Fallback` is the allocator equivalent of an "or" operator in
+algebra. An allocation request is first attempted with `A`. 
+If that fails, the request is forwarded to `B`. 
+All other requests are dispatched appropriately to one of
+the two allocators.
+
+In order to work, `Fallback` requires that `A` implement `QueryAlloc`. 
+This is needed in order to decide which allocator was
+responsible for a given allocation.
+
+$(D FallbackAllocator) is useful for fast, special-purpose allocators backed up
+by general-purpose allocators.
+*/
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fallback<A, B>(pub A, pub B);
 

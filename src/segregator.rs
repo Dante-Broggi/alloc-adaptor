@@ -1,6 +1,16 @@
 use std::{alloc::Allocator, ptr::NonNull};
 use crate::{DeallocAll, QueryAlloc};
 
+/**
+Dispatches allocations (and deallocations) between two allocators (`Small`
+and `Large`) depending on the size allocated, as
+follows: 
+    All allocations smaller than or equal to `N` will be dispatched to $(D SmallAllocator). 
+    The others will go to $(D LargeAllocator).
+
+If both allocators are $(D shared), the $(D Segregator) will also offer $(D
+shared) methods.
+*/
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Segregator<Small, Large, const N: usize>(pub Small, pub Large);
 
