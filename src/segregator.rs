@@ -1,6 +1,7 @@
 use std::{alloc::Allocator, ptr::NonNull};
 use crate::{DeallocAll, QueryAlloc};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Segregator<Small, Large, const N: usize>(pub Small, pub Large);
 
 unsafe impl<Small: Allocator, Large: Allocator, const N: usize> Allocator for Segregator<Small, Large, N> {

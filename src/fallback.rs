@@ -1,6 +1,7 @@
 use std::alloc::Allocator;
 use crate::{DeallocAll, QueryAlloc};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fallback<A, B>(pub A, pub B);
 
 unsafe impl<A: QueryAlloc, B: Allocator> Allocator for Fallback<A, B> {
